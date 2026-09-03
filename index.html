@@ -1,3 +1,6 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Keosanth CRM</title>
@@ -291,6 +294,8 @@
     @page{ size:A4 landscape; margin:14mm 10mm; }
   }
 </style>
+</head>
+<body>
 
 <div class="bg-decor"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
 
@@ -2982,3 +2987,42 @@
 
 })();
 </script>
+<script>
+(function(){
+  // --- auto-sync: silently checks version.json and reloads open tabs when a new
+  // version has been deployed, so viewers see updates without pressing refresh ---
+  var known = null;
+  var banner = null;
+  function showBanner(){
+    if(banner) return;
+    banner = document.createElement('div');
+    banner.textContent = 'มีข้อมูลอัปเดตใหม่ กำลังโหลด...';
+    banner.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);'+
+      'background:#1c1420;color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;'+
+      'font-family:sans-serif;z-index:99999;box-shadow:0 8px 24px rgba(0,0,0,0.25);opacity:0;'+
+      'transition:opacity .25s ease;';
+    document.body.appendChild(banner);
+    requestAnimationFrame(function(){ banner.style.opacity = '1'; });
+  }
+  function check(){
+    fetch('version.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data){
+        if(!data || !data.version) return;
+        if(known === null){ known = data.version; return; }
+        if(data.version !== known){
+          showBanner();
+          setTimeout(function(){ location.reload(); }, 1200);
+        }
+      })
+      .catch(function(){ /* offline or blocked — just retry next interval */ });
+  }
+  check();
+  setInterval(check, 30000);
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible') check();
+  });
+})();
+</script>
+</body>
+</html>
