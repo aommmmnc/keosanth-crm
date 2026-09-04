@@ -525,6 +525,9 @@
     "ช่วงเวลาที่กำหนดเอง": "Custom Period",
     "ใช้ช่วงเวลานี้": "Apply",
     "ล้าง (กลับไปใช้ปี/เดือนจาก Sidebar)": "Clear (use sidebar Year/Month)",
+    "ประวัติการซื้อสินค้ารายชิ้น": "Line-Item Purchase History",
+    "ทุกรายการซื้อแยกทีละชิ้น/ทีละบรรทัด": "Every purchase, one line per item",
+    "— ค้นหาลูกค้า/สินค้า, กรองตามหมวดหมู่": "— search customer/product, filter by category",
     "มุมมองเซลล์รายบุคคล": "Individual Sales Rep View",
     "วันที่ออกใบสั่งขาย": "Order Date",
     "ผู้มีอำนาจตัดสินใจ": "Decision Maker",
@@ -2629,6 +2632,37 @@
       custPickSelect.addEventListener('change', renderCustPick);
       renderCustPick();
       root.appendChild(custPickPanel);
+
+      /* ---- raw per-piece purchase history: every product transaction as its own line ---- */
+      var linePanel = document.createElement('div'); linePanel.className='card panel'; linePanel.style.marginTop='14px';
+      var lineTh = document.createElement('h3'); lineTh.textContent='ประวัติการซื้อสินค้ารายชิ้น'; linePanel.appendChild(lineTh);
+      var lineSub = document.createElement('div'); lineSub.className='sub'; lineSub.textContent='ทุกรายการซื้อแยกทีละชิ้น/ทีละบรรทัด ('+periodLabelCD()+') — ค้นหาลูกค้า/สินค้า, กรองตามหมวดหมู่'; linePanel.appendChild(lineSub);
+      var lineRows = activeProdTxns.map(function(t){
+        var prod = PRODUCTS[t.prod];
+        var custName = CUSTOMERS_EXT[t.cust];
+        var isMainCust = t.cust < CUSTOMERS.length;
+        var bucket = productBucket(prod.name, prod.spec);
+        return {date:t.date, custIdx:t.cust, custName:custName, isMainCust:isMainCust, prodIdx:t.prod, prodName:prod.name, spec:prod.spec, qty:t.qty, bucket:bucket};
+      });
+      var lineCatOptions = [{value:'all', label:'ทุกหมวดสินค้า'}].concat(
+        CATEGORY_LIST_CD.map(function(c){ return {value:c.key, label:c.label}; })
+      );
+      var lineTable = DataTable({
+        columns: [
+          {key:'date', label:'วันที่', sort:true, align:'left', defaultDir:-1, get:function(r){return r.date;}, render:function(r){return '<span class="mono">'+fmtDate(r.date)+'</span>';}},
+          {key:'custName', label:'ลูกค้า', sort:true, get:function(r){return r.custName;}, render:function(r){return r.isMainCust ? '<span class="cust-link" data-idx="'+r.custIdx+'">'+escapeHtml(r.custName)+'</span>' : escapeHtml(r.custName);}},
+          {key:'prodName', label:'สินค้า', sort:true, get:function(r){return r.prodName;}, render:function(r){return '<span class="prod-link" data-idx="'+r.prodIdx+'">'+escapeHtml(r.prodName)+'</span>';}},
+          {key:'spec', label:'หมวดหมู่', sort:true, get:function(r){return r.spec;}, render:function(r){return escapeHtml(r.spec);}},
+          {key:'qty', label:'จำนวน', sort:true, align:'right', defaultDir:-1, get:function(r){return r.qty;}, render:function(r){return '<span class="mono">'+r.qty.toLocaleString('en-US')+'</span>';}}
+        ],
+        rows: lineRows, searchKeys:['custName','prodName','spec'], searchPlaceholder:'ค้นหาลูกค้า/สินค้า/หมวดหมู่…',
+        initialSort:{key:'date', dir:-1},
+        filters:[{key:'category', label:'หมวดสินค้า', options:lineCatOptions}],
+        extraFilters:function(r,f){ return f.category==='all' || r.bucket===f.category; },
+        renderLimit:800
+      });
+      linePanel.appendChild(lineTable);
+      root.appendChild(linePanel);
 
       var tierOptions = [{value:'all', label:'ทุก Tier'}, {value:'S', label:'S'}, {value:'A', label:'A'}, {value:'B', label:'B'}];
       var regionOptionsCD = [{value:'all', label:'ทุกภาค/พื้นที่'}].concat(
