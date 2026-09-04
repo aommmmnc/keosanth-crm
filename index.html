@@ -363,6 +363,7 @@
       <section id="view-bestsellers" class="view"></section>
       <section id="view-geo" class="view"></section>
       <section id="view-customerdata" class="view"></section>
+      <section id="view-gtm" class="view"></section>
     </div>
   </main>
 </div>
@@ -528,6 +529,43 @@
     "ประวัติการซื้อสินค้ารายชิ้น": "Line-Item Purchase History",
     "ทุกรายการซื้อแยกทีละชิ้น/ทีละบรรทัด": "Every purchase, one line per item",
     "— ค้นหาลูกค้า/สินค้า, กรองตามหมวดหมู่": "— search customer/product, filter by category",
+    "แผนบุกตลาด": "Go-to-Market Plan",
+    "แผนบุกตลาด: ลำดับความสำคัญลูกค้า": "Go-to-Market: Customer Priority Ranking",
+    "จัดอันดับคลินิกทั้งหมดตามโอกาสทำยอดขาย (Tier เดิม × สถานะความสัมพันธ์ × พื้นที่) เพื่อวางแผนว่าควรเข้าพบใครก่อน — ใช้ประวัติซื้อตลอดอายุลูกค้า ไม่ขึ้นกับตัวกรองปี/เดือนที่ sidebar": "Ranks every clinic by sales opportunity (existing Tier × relationship status × region) to plan who to visit first — uses lifetime purchase history, independent of the sidebar Year/Month filter",
+    "คลินิกที่ยังเปิดอยู่": "Open Clinics",
+    "เป้าหมายเร่งด่วน": "Priority Targets",
+    "คะแนนโอกาส ≥ 60 — Tier S/A ที่ยังซื้ออยู่หรือน่า win-back": "Opportunity score ≥ 60 — Tier S/A that's still buying or a strong win-back candidate",
+    "เป้าหมาย Win-back": "Win-back Targets",
+    "เคยซื้อ เงียบไปนาน แต่ยืนยันแล้วว่ายังเปิดกิจการ": "Bought before, gone quiet, but confirmed still operating",
+    "มูลค่าตลาดสะสม": "Cumulative Market Value",
+    "ยอดซื้อสะสมตลอดอายุของคลินิกที่ยังเปิดอยู่": "Lifetime purchase total of clinics still open",
+    "คะแนนโอกาสรวมตามภาค": "Total Opportunity Score by Region",
+    "ช่วยตัดสินใจว่าควรส่งทีมขายเข้าพื้นที่ไหนก่อน": "Helps decide which area to send the sales team to first",
+    "สัดส่วนเป้าหมายตามสถานะ": "Target Mix by Status",
+    "ไม่รวมคลินิกที่ปิดกิจการแล้ว": "Excludes clinics that have closed",
+    "ลำดับเป้าหมายเข้าพบ": "Visit Priority Ranking",
+    "เรียงตามคะแนนโอกาสมากไปน้อย — ค้นหา/กรองตามภาค/Tier/สถานะได้ · คลิกชื่อลูกค้าเพื่อดูโปรไฟล์เต็ม": "Sorted by opportunity score, highest first — search/filter by region/Tier/status · click a name to view the full profile",
+    "หมวดสินค้าหลัก": "Top Category",
+    "ยอดสะสมทั้งหมด": "Lifetime Total",
+    "คะแนนโอกาส": "Opportunity Score",
+    "คำแนะนำ": "Suggested Action",
+    "ปิดกิจการแล้ว — ข้ามไม่ต้องเข้าพบ": "Already closed — skip, no need to visit",
+    "ไม่มีประวัติซื้อ — ตรวจสอบก่อนติดต่อ": "No purchase history — verify before contacting",
+    "ซื้อสม่ำเสมอ — รักษาความสัมพันธ์/เสนอสินค้าต่อยอด": "Buys regularly — maintain the relationship / cross-sell",
+    "เริ่มซื้อห่างขึ้น — ติดต่อก่อนเสียลูกค้าไปคู่แข่ง": "Buying less often — reach out before losing them to a competitor",
+    "เคยซื้อเยอะ เงียบไปนาน แต่ยังเปิดกิจการ — เป้าหมาย Win-back อันดับต้น": "Used to buy a lot, gone quiet, but still open — a top win-back target",
+    "ไม่ได้ซื้อนาน ยังไม่ยืนยันว่ากิจการยังเปิดอยู่ — ตรวจสอบก่อนเข้าพบ": "Hasn't bought in a long time, not confirmed still open — verify before visiting",
+    "ปิดกิจการแล้ว": "Closed",
+    "ไม่เคยซื้อ": "Never Purchased",
+    "ลูกค้าปัจจุบัน": "Current Customer",
+    "เริ่มห่างหาย": "Cooling Off",
+    "เงียบไปนาน": "Long Dormant",
+    "ทุกภาค/พื้นที่": "All Regions/Areas",
+    "ทุก Tier": "All Tiers",
+    "ไม่มี Tier": "No Tier",
+    "ทั้งหมด (ไม่รวมปิดกิจการ)": "All (excluding closed)",
+    "คะแนน": "points",
+    "คะแนนโอกาสรวม": "Total opportunity score",
     "มุมมองเซลล์รายบุคคล": "Individual Sales Rep View",
     "วันที่ออกใบสั่งขาย": "Order Date",
     "ผู้มีอำนาจตัดสินใจ": "Decision Maker",
@@ -2766,6 +2804,151 @@
     }
   };
 
+  /* ---------- go-to-market: rank every clinic as an early sales-visit target ----------
+     Uses lifetime order/product history (not the sidebar Year/Month filter) since this is a
+     standing strategic reference, not a period report. Score = tier weight × relationship-status
+     multiplier — meant to guide a new sales team (or a new product line) on who to approach first
+     and in what order, using Keosanth's own purchase history as a market map. */
+  var GTM_CATEGORY_LABEL = {fitme:'Fitme', misti:'Misti', fixtine:'FIXTINE', tnr:'TNR Mesh', nasal:'Nasal splint', surederm:'Surederm', reproderm:'Reproderm', other:'อื่นๆ'};
+  var GTM_TIER_SCORE = {S:100, A:60, B:30};
+  VIEWS.gtm = {
+    eyebrow: function(){ return '10 · Go-to-Market'; },
+    title: 'แผนบุกตลาด: ลำดับความสำคัญลูกค้า',
+    desc: 'จัดอันดับคลินิกทั้งหมดตามโอกาสทำยอดขาย (Tier เดิม × สถานะความสัมพันธ์ × พื้นที่) เพื่อวางแผนว่าควรเข้าพบใครก่อน — ใช้ประวัติซื้อตลอดอายุลูกค้า ไม่ขึ้นกับตัวกรองปี/เดือนที่ sidebar',
+    render: function(root){
+      root.innerHTML = '';
+
+      var lifeRoll = CUSTOMERS.map(function(name, idx){ return {idx:idx, name:name, total:0, count:0, last:null}; });
+      ALL_ORDERS.forEach(function(o){
+        var c = lifeRoll[o.cust];
+        c.total += o.amount; c.count++;
+        if(!c.last || o.date > c.last) c.last = o.date;
+      });
+      var lifeMix = getCustProductMix(PROD_TXNS);
+
+      var byRevDesc = lifeRoll.slice().sort(function(a,b){ return b.total-a.total; });
+      var tierByIdx = {};
+      byRevDesc.forEach(function(c, i){
+        var meta = META_BY_IDX[c.idx];
+        tierByIdx[c.idx] = (meta && meta.tier) ? meta.tier : (c.total>0 ? computeAutoTier(i+1, byRevDesc.length) : null);
+      });
+
+      var rows = CUSTOMERS.map(function(name, idx){
+        var c = lifeRoll[idx];
+        var geo = GEO_BY_IDX[idx] || {};
+        var tier = tierByIdx[idx];
+        var daysSince = c.last ? daysBetween(c.last, TRUE_MAX_DATE) : null;
+        var status, statusLabel, mult, advice;
+        if(geo.closed){
+          status='closed'; statusLabel='ปิดกิจการแล้ว'; mult=0; advice='ปิดกิจการแล้ว — ข้ามไม่ต้องเข้าพบ';
+        } else if(daysSince==null){
+          status='none'; statusLabel='ไม่เคยซื้อ'; mult=0.2; advice='ไม่มีประวัติซื้อ — ตรวจสอบก่อนติดต่อ';
+        } else if(daysSince<=90){
+          status='active'; statusLabel='ลูกค้าปัจจุบัน'; mult=1.0; advice='ซื้อสม่ำเสมอ — รักษาความสัมพันธ์/เสนอสินค้าต่อยอด';
+        } else if(daysSince<=365){
+          status='cooling'; statusLabel='เริ่มห่างหาย'; mult=0.75; advice='เริ่มซื้อห่างขึ้น — ติดต่อก่อนเสียลูกค้าไปคู่แข่ง';
+        } else if(geo.stillOpen){
+          status='winback'; statusLabel='Win-back (ยังเปิดอยู่)'; mult=0.6; advice='เคยซื้อเยอะ เงียบไปนาน แต่ยังเปิดกิจการ — เป้าหมาย Win-back อันดับต้น';
+        } else {
+          status='dormant'; statusLabel='เงียบไปนาน'; mult=0.35; advice='ไม่ได้ซื้อนาน ยังไม่ยืนยันว่ากิจการยังเปิดอยู่ — ตรวจสอบก่อนเข้าพบ';
+        }
+        var tierScore = tier ? GTM_TIER_SCORE[tier] : 15;
+        var score = tierScore * mult;
+
+        var mix = lifeMix[idx];
+        var topCat = null;
+        if(mix){
+          var entries = Object.keys(mix).map(function(k){ return [k, mix[k]]; }).filter(function(e){ return e[1]>0; });
+          entries.sort(function(a,b){ return b[1]-a[1]; });
+          if(entries.length) topCat = entries[0][0];
+        }
+
+        return {
+          idx:idx, name:name, tier:tier, region:geo.region||'unknown',
+          regionLabel:geo.regionLabel||REGION_LABEL[geo.region]||'ไม่ระบุพื้นที่', detail:geo.detail||null,
+          total:c.total, count:c.count, last:c.last, status:status, statusLabel:statusLabel,
+          topCat:topCat, score:score, advice:advice, closed: !!geo.closed
+        };
+      });
+
+      var openRows = rows.filter(function(r){ return !r.closed; });
+      var highPriority = openRows.filter(function(r){ return r.score>=60; });
+      var winbackCount = openRows.filter(function(r){ return r.status==='winback'; }).length;
+      var totalLifeRev = openRows.reduce(function(s,r){ return s+r.total; }, 0);
+
+      var kpis = document.createElement('div'); kpis.className='grid g-4';
+      kpis.appendChild(kpiCard('คลินิกที่ยังเปิดอยู่', openRows.length+' ราย', 'จากฐานลูกค้าทั้งหมด '+CUSTOMERS.length+' ราย'));
+      kpis.appendChild(kpiCard('เป้าหมายเร่งด่วน', highPriority.length+' ราย', 'คะแนนโอกาส ≥ 60 — Tier S/A ที่ยังซื้ออยู่หรือน่า win-back'));
+      kpis.appendChild(kpiCard('เป้าหมาย Win-back', winbackCount+' ราย', 'เคยซื้อ เงียบไปนาน แต่ยืนยันแล้วว่ายังเปิดกิจการ'));
+      kpis.appendChild(kpiCard('มูลค่าตลาดสะสม', '฿'+fmtBaht(totalLifeRev,true), 'ยอดซื้อสะสมตลอดอายุของคลินิกที่ยังเปิดอยู่'));
+      root.appendChild(kpis);
+
+      var note = document.createElement('div'); note.className='note'; note.style.marginTop='14px';
+      note.innerHTML = '<b>i</b><div><b>คะแนนโอกาส</b> = น้ำหนัก Tier (S=100, A=60, B=30, ไม่มี Tier=15) × ตัวคูณสถานะความสัมพันธ์ (ลูกค้าปัจจุบัน=1.0, เริ่มห่างหาย=0.75, Win-back ที่ยังเปิดอยู่=0.6, เงียบไปนานไม่ยืนยันสถานะ=0.35, ไม่เคยซื้อ=0.2, ปิดกิจการแล้ว=0) — อิงจากพฤติกรรมซื้อสินค้า Keosanth เท่านั้น ถ้าสินค้า/บริการของบริษัทใหม่ต่างจากนี้มาก ควรใช้คะแนนนี้เป็นแนวทางคร่าวๆ ร่วมกับดุลยพินิจทีมขาย</div>';
+      root.appendChild(note);
+
+      var row1 = document.createElement('div'); row1.className='grid g-2'; row1.style.marginTop='14px';
+      var p1 = panel('คะแนนโอกาสรวมตามภาค', 'ช่วยตัดสินใจว่าควรส่งทีมขายเข้าพื้นที่ไหนก่อน');
+      var scoreByRegion = {};
+      openRows.forEach(function(r){ scoreByRegion[r.regionLabel] = (scoreByRegion[r.regionLabel]||0) + r.score; });
+      var regionBars = Object.keys(scoreByRegion).map(function(k){ return [k, scoreByRegion[k]]; }).sort(function(a,b){ return b[1]-a[1]; }).slice(0,12);
+      if(regionBars.length){
+        renderBars(p1._body, regionBars, {
+          fmt: function(d){ return d[1].toFixed(0)+' '+T('คะแนน'); },
+          tooltip: function(d){ return '<b>'+d[0]+'</b><div class="row"><span>'+T('คะแนนโอกาสรวม')+'</span><b>'+d[1].toFixed(0)+'</b></div>'; }
+        });
+      } else { p1._body.innerHTML = '<div class="sub">'+T('ไม่มีข้อมูล')+'</div>'; }
+      var p2 = panel('สัดส่วนเป้าหมายตามสถานะ', 'ไม่รวมคลินิกที่ปิดกิจการแล้ว');
+      var statusOrder = [['active','ลูกค้าปัจจุบัน'], ['cooling','เริ่มห่างหาย'], ['winback','Win-back'], ['dormant','เงียบไปนาน'], ['none','ไม่เคยซื้อ']];
+      var statusCounts = {}; openRows.forEach(function(r){ statusCounts[r.status] = (statusCounts[r.status]||0)+1; });
+      renderBars(p2._body, statusOrder.map(function(s){ return [s[1], statusCounts[s[0]]||0]; }), {
+        fmt: function(d){ return d[1].toLocaleString('en-US')+' '+T('ราย'); },
+        tooltip: function(d){ return '<b>'+d[0]+'</b><div class="row"><span>'+T('จำนวน')+'</span><b>'+d[1]+' '+T('ราย')+'</b></div>'; }
+      });
+      row1.appendChild(p1); row1.appendChild(p2); root.appendChild(row1);
+
+      var tablePanel = document.createElement('div'); tablePanel.className='card panel'; tablePanel.style.marginTop='14px';
+      var th = document.createElement('h3'); th.textContent='ลำดับเป้าหมายเข้าพบ'; tablePanel.appendChild(th);
+      var tsub = document.createElement('div'); tsub.className='sub'; tsub.textContent='เรียงตามคะแนนโอกาสมากไปน้อย — ค้นหา/กรองตามภาค/Tier/สถานะได้ · คลิกชื่อลูกค้าเพื่อดูโปรไฟล์เต็ม'; tablePanel.appendChild(tsub);
+
+      var regionOptionsGTM = [{value:'all', label:'ทุกภาค/พื้นที่'}].concat(
+        Array.from(new Set(rows.map(function(r){return r.region;}))).filter(function(r){return r!=='unknown';}).map(function(r){return {value:r, label:REGION_LABEL[r]||r};})
+      );
+      var tierOptionsGTM = [{value:'all', label:'ทุก Tier'}, {value:'S', label:'S'}, {value:'A', label:'A'}, {value:'B', label:'B'}, {value:'none', label:'ไม่มี Tier'}];
+      var statusOptionsGTM = [{value:'open', label:'ทั้งหมด (ไม่รวมปิดกิจการ)'}, {value:'active', label:'ลูกค้าปัจจุบัน'}, {value:'cooling', label:'เริ่มห่างหาย'}, {value:'winback', label:'Win-back'}, {value:'dormant', label:'เงียบไปนาน'}, {value:'none', label:'ไม่เคยซื้อ'}, {value:'closed', label:'ปิดกิจการแล้ว'}];
+
+      var gtmTable = DataTable({
+        columns: [
+          {key:'name', label:'ลูกค้า', sort:true, get:function(r){return r.name;}, render:function(r){return '<span class="cust-link" data-idx="'+r.idx+'">'+escapeHtml(r.name)+'</span>'+closedBadge(GEO_BY_IDX[r.idx]);}},
+          {key:'regionLabel', label:'ภาค/จังหวัด', sort:true, get:function(r){return r.regionLabel;}, render:function(r){return escapeHtml(r.regionLabel)+(r.detail?' · '+escapeHtml(r.detail):'');}},
+          {key:'tier', label:'Tier', sort:true, get:function(r){return r.tier||'';}, render:function(r){return r.tier?tierBadge(r.tier,false):'—';}},
+          {key:'status', label:'สถานะ', sort:true, get:function(r){return r.statusLabel;}, render:function(r){return escapeHtml(r.statusLabel);}},
+          {key:'topCat', label:'หมวดสินค้าหลัก', sort:true, get:function(r){return r.topCat||'';}, render:function(r){return r.topCat?escapeHtml(GTM_CATEGORY_LABEL[r.topCat]||r.topCat):'—';}},
+          {key:'total', label:'ยอดสะสมทั้งหมด', sort:true, align:'right', defaultDir:-1, get:function(r){return r.total;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.total,true)+'</span>';}},
+          {key:'last', label:'ซื้อล่าสุด', sort:true, get:function(r){return r.last||'';}, render:function(r){return r.last?fmtDate(r.last):'—';}},
+          {key:'score', label:'คะแนนโอกาส', sort:true, align:'right', defaultDir:-1, get:function(r){return r.score;}, render:function(r){return '<span class="mono">'+r.score.toFixed(0)+'</span>';}},
+          {key:'advice', label:'คำแนะนำ', sort:false, get:function(r){return r.advice;}, render:function(r){return '<span style="font-size:12px; color:var(--ink-2);">'+escapeHtml(r.advice)+'</span>';}}
+        ],
+        rows: rows, searchKeys:['name'], searchPlaceholder:'ค้นหาชื่อลูกค้า…',
+        initialSort:{key:'score', dir:-1},
+        filters:[
+          {key:'region', label:'ภาค/พื้นที่', options:regionOptionsGTM},
+          {key:'tier', label:'Tier', options:tierOptionsGTM},
+          {key:'status', label:'สถานะ', options:statusOptionsGTM}
+        ],
+        extraFilters:function(r,f){
+          if(f.region!=='all' && r.region!==f.region) return false;
+          if(f.tier!=='all' && (f.tier==='none' ? r.tier : r.tier!==f.tier)) return false;
+          if(f.status==='open'){ if(r.closed) return false; }
+          else if(f.status!=='all' && r.status!==f.status) return false;
+          return true;
+        },
+        renderLimit:900
+      });
+      tablePanel.appendChild(gtmTable); root.appendChild(tablePanel);
+    }
+  };
+
   var NAV_MANAGER = [
     {key:'overview', label:'ภาพรวม'},
     {key:'forecast', label:'พยากรณ์ยอดขาย'},
@@ -2776,7 +2959,8 @@
     {key:'warehouse', label:'คลังสินค้า'},
     {key:'bestsellers', label:'สินค้าขายดี'},
     {key:'geo', label:'ภูมิศาสตร์ลูกค้า'},
-    {key:'customerdata', label:'ข้อมูลลูกค้า'}
+    {key:'customerdata', label:'ข้อมูลลูกค้า'},
+    {key:'gtm', label:'แผนบุกตลาด'}
   ];
   var NAV_REP = [
     {key:'sales', label:'แดชบอร์ดของฉัน'},
@@ -2787,7 +2971,7 @@
     rep: NAV_REP,
     warehouse: [{key:'warehouse', label:'คลังสินค้า'}, {key:'bestsellers', label:'สินค้าขายดี'}],
     accounting: [{key:'accounting', label:'บัญชี'}],
-    marketing: [{key:'marketing', label:'การตลาด'}, {key:'geo', label:'ภูมิศาสตร์ลูกค้า'}],
+    marketing: [{key:'marketing', label:'การตลาด'}, {key:'geo', label:'ภูมิศาสตร์ลูกค้า'}, {key:'gtm', label:'แผนบุกตลาด'}],
     general: [{key:'customerdata', label:'ข้อมูลลูกค้า'}]
   };
   var currentView = 'overview';
