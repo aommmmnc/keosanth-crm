@@ -514,6 +514,9 @@
     "สินค้าขายดีอันดับ 1": "#1 Best-Selling Product",
     "ยอดคาดการณ์ที่เหลือ": "Remaining Forecast",
     "จำนวนลูกค้าตาม Tier": "Customer Count by Tier",
+    "อันดับลูกค้าตามหมวดสินค้า": "Customer Ranking by Product Category",
+    "Top 15 ลูกค้าที่ซื้อมากที่สุดในหมวดที่เลือก (ตามจำนวนชิ้น) — คลิกแท่งเพื่อดูโปรไฟล์ลูกค้า": "Top 15 customers by quantity in the selected category — click a bar to view the customer profile",
+    "สัดส่วนในหมวดนี้": "Share of this category",
     "มุมมองเซลล์รายบุคคล": "Individual Sales Rep View",
     "วันที่ออกใบสั่งขาย": "Order Date",
     "ผู้มีอำนาจตัดสินใจ": "Decision Maker",
@@ -2482,6 +2485,46 @@
       });
       row1.appendChild(p1); row1.appendChild(p2); root.appendChild(row1);
 
+      /* ---- ranking: top customers within one chosen product category ---- */
+      var CATEGORY_LIST_CD = [
+        {key:'fitme', label:'Fitme', qtyKey:'fitmeQty'},
+        {key:'misti', label:'Misti', qtyKey:'mistiQty'},
+        {key:'fixtine', label:'FIXTINE', qtyKey:'fixtineQty'},
+        {key:'tnr', label:'TNR Mesh', qtyKey:'tnrQty'},
+        {key:'nasal', label:'Nasal splint', qtyKey:'nasalQty'},
+        {key:'surederm', label:'Surederm', qtyKey:'surdermQty'},
+        {key:'reproderm', label:'Reproderm', qtyKey:'reprodermQty'},
+        {key:'other', label:'อื่นๆ', qtyKey:'otherQty'}
+      ];
+      var rankPanel = document.createElement('div'); rankPanel.className='card panel'; rankPanel.style.marginTop='14px';
+      var rankHeadRow = document.createElement('div'); rankHeadRow.style.cssText='display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;';
+      var rankTh = document.createElement('h3'); rankTh.textContent='อันดับลูกค้าตามหมวดสินค้า'; rankHeadRow.appendChild(rankTh);
+      var rankSelect = document.createElement('select');
+      CATEGORY_LIST_CD.forEach(function(c){ var op=document.createElement('option'); op.value=c.key; op.textContent=T(c.label); rankSelect.appendChild(op); });
+      rankSelect.value = 'misti';
+      rankHeadRow.appendChild(rankSelect);
+      rankPanel.appendChild(rankHeadRow);
+      var rankSub = document.createElement('div'); rankSub.className='sub'; rankSub.textContent='Top 15 ลูกค้าที่ซื้อมากที่สุดในหมวดที่เลือก (ตามจำนวนชิ้น) — คลิกแท่งเพื่อดูโปรไฟล์ลูกค้า'; rankPanel.appendChild(rankSub);
+      var rankBody = document.createElement('div'); rankBody.style.marginTop='6px'; rankPanel.appendChild(rankBody);
+      function renderRankCD(){
+        var cat = CATEGORY_LIST_CD.filter(function(c){return c.key===rankSelect.value;})[0];
+        var ranked = rows.filter(function(r){ return r[cat.qtyKey]>0; }).sort(function(a,b){ return b[cat.qtyKey]-a[cat.qtyKey]; }).slice(0,15);
+        if(!ranked.length){ rankBody.innerHTML = '<div class="sub">'+T('ไม่มีข้อมูล')+'</div>'; return; }
+        var catTotal = totalMix[cat.key] || 0;
+        renderBars(rankBody, ranked.map(function(r){ return [r.name, r[cat.qtyKey]]; }), {
+          fmt: function(d){ return d[1].toLocaleString('en-US')+' '+T('ชิ้น'); },
+          onClick: function(d){ var r=ranked.filter(function(x){return x.name===d[0];})[0]; openCustomerDetail(r.idx); },
+          tooltip: function(d){
+            var r=ranked.filter(function(x){return x.name===d[0];})[0];
+            return '<b>'+d[0]+'</b><div class="row"><span>'+T(cat.label)+'</span><b>'+d[1].toLocaleString('en-US')+' '+T('ชิ้น')+'</b></div>'+
+              (catTotal ? '<div class="row"><span>'+T('สัดส่วนในหมวดนี้')+'</span><b>'+(d[1]/catTotal*100).toFixed(1)+'%</b></div>' : '');
+          }
+        });
+      }
+      rankSelect.addEventListener('change', renderRankCD);
+      renderRankCD();
+      root.appendChild(rankPanel);
+
       var tierOptions = [{value:'all', label:'ทุก Tier'}, {value:'S', label:'S'}, {value:'A', label:'A'}, {value:'B', label:'B'}];
       var regionOptionsCD = [{value:'all', label:'ทุกภาค/พื้นที่'}].concat(
         Array.from(new Set(rows.map(function(r){return r.region;}))).filter(function(r){return r!=='unknown';}).map(function(r){return {value:r, label:REGION_LABEL[r]||r};})
@@ -2552,39 +2595,30 @@
       var behPanel = document.createElement('div'); behPanel.className='card panel'; behPanel.style.marginTop='14px';
       var behTh = document.createElement('h3'); behTh.textContent='พฤติกรรมการซื้อและสัดส่วนสินค้า'; behPanel.appendChild(behTh);
       var behSub = document.createElement('div'); behSub.className='sub'; behSub.textContent='สัดส่วนสินค้าแต่ละหมวด, ยอด'+periodLabel()+', จำนวนออเดอร์, วันที่ซื้อล่าสุด และสถานะ'; behPanel.appendChild(behSub);
-      var PRODUCT_CATEGORIES_CD = [
-        {key:'fitme', label:'Fitme', qtyKey:'fitmeQty'},
-        {key:'misti', label:'Misti', qtyKey:'mistiQty'},
-        {key:'fixtine', label:'FIXTINE', qtyKey:'fixtineQty'},
-        {key:'tnr', label:'TNR Mesh', qtyKey:'tnrQty'},
-        {key:'nasal', label:'Nasal splint', qtyKey:'nasalQty'},
-        {key:'surederm', label:'Surederm', qtyKey:'surdermQty'},
-        {key:'reproderm', label:'Reproderm', qtyKey:'reprodermQty'},
-        {key:'other', label:'อื่นๆ', qtyKey:'otherQty'}
+      var categoryOptionsCD = [
+        {value:'all', label:'ทุกหมวดสินค้า'},
+        {value:'fitme', label:'Fitme'},
+        {value:'misti', label:'Misti'},
+        {value:'fixtine', label:'FIXTINE'},
+        {value:'tnr', label:'TNR Mesh'},
+        {value:'nasal', label:'Nasal splint'},
+        {value:'surederm', label:'Surederm'},
+        {value:'reproderm', label:'Reproderm'},
+        {value:'other', label:'อื่นๆ'}
       ];
+      var CATEGORY_QTY_KEY = {fitme:'fitmeQty', misti:'mistiQty', fixtine:'fixtineQty', tnr:'tnrQty', nasal:'nasalQty', surederm:'surdermQty', reproderm:'reprodermQty', other:'otherQty'};
       var behTable = DataTable({
         columns: cdBehaviorColumns,
         rows: rows, searchKeys:['name'], searchPlaceholder:'ค้นหาชื่อลูกค้า…',
         initialSort:{key:'rev', dir:-1},
         secondarySort:'rev',
-        filters:[{key:'status', label:'สถานะ', options:statusOptionsCD}].concat(
-          PRODUCT_CATEGORIES_CD.map(function(c){
-            return {key:'cat_'+c.key, label:c.label, options:[
-              {value:'all', label:c.label+': '+'ทั้งหมด'},
-              {value:'yes', label:c.label+': '+'มีซื้อ'},
-              {value:'no', label:c.label+': '+'ไม่ซื้อ'}
-            ]};
-          })
-        ),
+        filters:[
+          {key:'status', label:'สถานะ', options:statusOptionsCD},
+          {key:'category', label:'หมวดสินค้า', options:categoryOptionsCD}
+        ],
         extraFilters:function(r,f){
           if(f.status!=='all' && r.status!==f.status) return false;
-          for(var i=0;i<PRODUCT_CATEGORIES_CD.length;i++){
-            var c = PRODUCT_CATEGORIES_CD[i];
-            var v = f['cat_'+c.key];
-            var has = r[c.qtyKey] > 0;
-            if(v==='yes' && !has) return false;
-            if(v==='no' && has) return false;
-          }
+          if(f.category!=='all' && !(r[CATEGORY_QTY_KEY[f.category]] > 0)) return false;
           return true;
         },
         renderLimit:1200
