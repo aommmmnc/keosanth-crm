@@ -522,6 +522,9 @@
     "— ค้นหา/เรียงลำดับได้": "— search/sort available",
     "ลูกค้ารายนี้ไม่มีประวัติซื้อสินค้าราย SKU ใน": "This customer has no per-SKU purchase history in ",
     "ชิ้นรวม": "units total",
+    "ช่วงเวลาที่กำหนดเอง": "Custom Period",
+    "ใช้ช่วงเวลานี้": "Apply",
+    "ล้าง (กลับไปใช้ปี/เดือนจาก Sidebar)": "Clear (use sidebar Year/Month)",
     "มุมมองเซลล์รายบุคคล": "Individual Sales Rep View",
     "วันที่ออกใบสั่งขาย": "Order Date",
     "ผู้มีอำนาจตัดสินใจ": "Decision Maker",
@@ -2129,15 +2132,37 @@
   /* period-scoped product mix: idx -> {fitme, misti, fixtine, tnr, nasal, surederm, reproderm, other} —
      recomputed fresh each call so it always reflects the sidebar's current Year/Month selection (via
      periodFilteredProdTxns). */
-  function getCustProductMix(){
+  function getCustProductMix(txnsList){
     var mix = {};
-    periodFilteredProdTxns().forEach(function(t){
+    (txnsList || periodFilteredProdTxns()).forEach(function(t){
       var prod = PRODUCTS[t.prod];
       var bucket = productBucket(prod.name, prod.spec);
       var m = mix[t.cust] || (mix[t.cust] = {fitme:0, misti:0, fixtine:0, tnr:0, nasal:0, surederm:0, reproderm:0, other:0});
       m[bucket] += t.qty;
     });
     return mix;
+  }
+  /* arbitrary from/to date range (inclusive, ISO yyyy-mm-dd) — independent of the sidebar Year/Month
+     selector, used only by the Customer Data page's optional custom-period controls */
+  function prodTxnsInRange(fromISO, toISO){
+    return PROD_TXNS.filter(function(t){ return t.date>=fromISO && t.date<=toISO; });
+  }
+  function custRollInRange(fromISO, toISO){
+    var rangeOrders = ALL_ORDERS.filter(function(o){ return o.date>=fromISO && o.date<=toISO; });
+    var roll = CUSTOMERS.map(function(name, idx){ return {name:name, idx:idx, total:0, count:0, last:null, first:null, pic:null}; });
+    rangeOrders.forEach(function(o){
+      var c = roll[o.cust];
+      c.total += o.amount; c.count++;
+      if(!c.last || o.date > c.last){ c.last = o.date; c.pic = PICS[o.pic]; }
+      if(!c.first || o.date < c.first){ c.first = o.date; }
+    });
+    var maxD = rangeOrders.length ? rangeOrders.reduce(function(m,o){ return o.date>m?o.date:m; }, rangeOrders[0].date) : null;
+    roll.forEach(function(c){
+      if(!c.last){ c.status = 'none'; return; }
+      var days = maxD ? daysBetween(c.last, maxD) : null;
+      c.status = (days!=null && days<=90) ? 'active' : (c.count>=3 ? 'risk' : 'quiet');
+    });
+    return roll;
   }
   var TIER_TH = {S:'S', A:'A', B:'B'};
   function computeAutoTier(rank, total){
@@ -2411,18 +2436,47 @@
   };
 
   /* ---------- customer master data (tier, contact, product mix, purchase behavior) ---------- */
+  var customerDataRange = null; // {from,to} ISO dates, or null to follow the sidebar Year/Month selector
+  function periodLabelCD(){ return customerDataRange ? (fmtDate(customerDataRange.from)+' – '+fmtDate(customerDataRange.to)) : periodLabel(); }
   VIEWS.customerdata = {
-    eyebrow: function(){ return '09 · Customer Data · '+periodLabel(); },
+    eyebrow: function(){ return '09 · Customer Data · '+periodLabelCD(); },
     title: 'ข้อมูลลูกค้า',
-    desc: function(){ return 'Tier · ผู้ติดต่อ · สัดส่วนสินค้า (Fitme/Misti/FIXTINE/TNR/Nasal splint/Surederm/Reproderm/อื่นๆ) และพฤติกรรมการซื้อ — ตาม'+periodLabel()+' (เปลี่ยนช่วงเวลาได้ที่ sidebar)'; },
+    desc: function(){ return 'Tier · ผู้ติดต่อ · สัดส่วนสินค้า (Fitme/Misti/FIXTINE/TNR/Nasal splint/Surederm/Reproderm/อื่นๆ) และพฤติกรรมการซื้อ — ตาม'+periodLabelCD()+(customerDataRange?'':' (เปลี่ยนช่วงเวลาได้ที่ sidebar หรือกำหนดช่วงเองด้านล่าง)'); },
     render: function(root){
       root.innerHTML = '';
-      var mixByIdx = getCustProductMix();
+
+      var rangeBar = document.createElement('div'); rangeBar.className='card panel'; rangeBar.style.cssText='margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;';
+      var rangeTitle = document.createElement('div'); rangeTitle.style.cssText='font-size:12.5px; font-weight:600; color:var(--ink-2); white-space:nowrap;'; rangeTitle.textContent = T('ช่วงเวลาที่กำหนดเอง')+':'; rangeBar.appendChild(rangeTitle);
+      var fromInput = document.createElement('input'); fromInput.type='date'; fromInput.value = customerDataRange ? customerDataRange.from : '';
+      var toInput = document.createElement('input'); toInput.type='date'; toInput.value = customerDataRange ? customerDataRange.to : '';
+      rangeBar.appendChild(fromInput);
+      var toLbl = document.createElement('span'); toLbl.textContent='–'; toLbl.style.color='var(--ink-muted)'; rangeBar.appendChild(toLbl);
+      rangeBar.appendChild(toInput);
+      var applyBtn = document.createElement('button'); applyBtn.type='button'; applyBtn.textContent=T('ใช้ช่วงเวลานี้');
+      applyBtn.style.cssText='background:var(--accent); color:var(--accent-ink); border:none; border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit;';
+      applyBtn.addEventListener('click', function(){
+        if(fromInput.value && toInput.value && fromInput.value<=toInput.value){
+          customerDataRange = {from: fromInput.value, to: toInput.value};
+          go('customerdata');
+        }
+      });
+      rangeBar.appendChild(applyBtn);
+      if(customerDataRange){
+        var clearBtn = document.createElement('button'); clearBtn.type='button'; clearBtn.textContent=T('ล้าง (กลับไปใช้ปี/เดือนจาก Sidebar)');
+        clearBtn.style.cssText='background:none; border:1px solid var(--border); color:var(--ink-2); border-radius:8px; padding:6px 12px; font-size:12.5px; cursor:pointer; font-family:inherit;';
+        clearBtn.addEventListener('click', function(){ customerDataRange = null; go('customerdata'); });
+        rangeBar.appendChild(clearBtn);
+      }
+      root.appendChild(rangeBar);
+
+      var activeProdTxns = customerDataRange ? prodTxnsInRange(customerDataRange.from, customerDataRange.to) : periodFilteredProdTxns();
+      var activeCustRoll = customerDataRange ? custRollInRange(customerDataRange.from, customerDataRange.to) : custRoll;
+      var mixByIdx = getCustProductMix(activeProdTxns);
 
       var rows = CUSTOMERS.map(function(name, idx){
         var meta = META_BY_IDX[idx] || {};
         var geo = GEO_BY_IDX[idx];
-        var life = custRoll[idx];
+        var life = activeCustRoll[idx];
         var mix = mixByIdx[idx];
         var mixTotal = mix ? (mix.fitme+mix.misti+mix.fixtine+mix.tnr+mix.nasal+mix.surederm+mix.reproderm+mix.other) : 0;
         return {
@@ -2470,7 +2524,7 @@
       root.appendChild(kpis);
 
       var note = document.createElement('div'); note.className='note'; note.style.marginTop='14px';
-      note.innerHTML = '<b>i</b><div><b>Fitme</b> = ซิลิโคนเฉพาะบุคคล (รหัสสินค้าขึ้นต้นด้วย FF หรือ FN ไม่ว่าจะอยู่ spec ไหน) · <b>Misti</b> = สินค้ากลุ่ม Silicone รูปแบบอื่นๆ ที่เหลือ (สำเร็จรูป) · <b>FIXTINE</b> = วัสดุดึงหน้าและอุปกรณ์ที่ใช้ฝังทั้งหมด (drill bit, driver, cutter, insertion tool, shaft, TAP, hole punch, Biobsorb) — คนละผลิตภัณฑ์กับ Fitme แม้ชื่อจะคล้ายกัน · <b>TNR</b> = TNR Mesh · <b>Nasal splint</b> = ดามจมูก · <b>Surederm</b> และ <b>Reproderm</b> = แยกหมวดของตัวเอง · <b>อื่นๆ</b> = สินค้าตัวอย่าง/อื่นๆ ที่เหลือ — คำนวณจากจำนวนชิ้นที่ซื้อจริงในช่วง'+periodLabel()+' (ไม่ใช่การประมาณของทีมขาย) · Tier ที่มีเครื่องหมาย <b>⁺</b> คือประมาณการจากยอดขายใน'+periodLabel()+' (10% บนสุด = S, 30% ถัดมา = A) ส่วนที่เหลือมาจากทีมขายจริง — เปลี่ยนปี/เดือนที่ sidebar เพื่อดู Tier ของช่วงเวลาอื่น</div>';
+      note.innerHTML = '<b>i</b><div><b>Fitme</b> = ซิลิโคนเฉพาะบุคคล (รหัสสินค้าขึ้นต้นด้วย FF หรือ FN ไม่ว่าจะอยู่ spec ไหน) · <b>Misti</b> = สินค้ากลุ่ม Silicone รูปแบบอื่นๆ ที่เหลือ (สำเร็จรูป) · <b>FIXTINE</b> = วัสดุดึงหน้าและอุปกรณ์ที่ใช้ฝังทั้งหมด (drill bit, driver, cutter, insertion tool, shaft, TAP, hole punch, Biobsorb) — คนละผลิตภัณฑ์กับ Fitme แม้ชื่อจะคล้ายกัน · <b>TNR</b> = TNR Mesh · <b>Nasal splint</b> = ดามจมูก · <b>Surederm</b> และ <b>Reproderm</b> = แยกหมวดของตัวเอง · <b>อื่นๆ</b> = สินค้าตัวอย่าง/อื่นๆ ที่เหลือ — คำนวณจากจำนวนชิ้นที่ซื้อจริงในช่วง'+periodLabelCD()+' (ไม่ใช่การประมาณของทีมขาย) · Tier ที่มีเครื่องหมาย <b>⁺</b> คือประมาณการจากยอดขายใน'+periodLabelCD()+' (10% บนสุด = S, 30% ถัดมา = A) ส่วนที่เหลือมาจากทีมขายจริง — เปลี่ยนปี/เดือนที่ sidebar หรือกำหนดช่วงเองด้านบนเพื่อดู Tier ของช่วงเวลาอื่น</div>';
       root.appendChild(note);
 
       var row1 = document.createElement('div'); row1.className='grid g-2'; row1.style.marginTop='14px';
@@ -2541,11 +2595,11 @@
       if(defaultPickRow) custPickSelect.value = defaultPickRow.idx;
       custPickHeadRow.appendChild(custPickSelect);
       custPickPanel.appendChild(custPickHeadRow);
-      var custPickSub = document.createElement('div'); custPickSub.className='sub'; custPickSub.textContent='เลือกคลินิก/ลูกค้าเพื่อดูสินค้าทุกรายการที่เคยซื้อ ('+periodLabel()+') — ค้นหา/เรียงลำดับได้'; custPickPanel.appendChild(custPickSub);
+      var custPickSub = document.createElement('div'); custPickSub.className='sub'; custPickSub.textContent='เลือกคลินิก/ลูกค้าเพื่อดูสินค้าทุกรายการที่เคยซื้อ ('+periodLabelCD()+') — ค้นหา/เรียงลำดับได้'; custPickPanel.appendChild(custPickSub);
       var custPickBody = document.createElement('div'); custPickBody.style.marginTop='6px'; custPickPanel.appendChild(custPickBody);
       function renderCustPick(){
         var cidx = parseInt(custPickSelect.value, 10);
-        var txnsForCust = periodFilteredProdTxns().filter(function(t){ return t.cust===cidx; });
+        var txnsForCust = activeProdTxns.filter(function(t){ return t.cust===cidx; });
         var byProd = {};
         txnsForCust.forEach(function(t){ byProd[t.prod] = (byProd[t.prod]||0)+t.qty; });
         var totalQty = Object.keys(byProd).reduce(function(s,k){ return s+byProd[k]; }, 0);
@@ -2555,7 +2609,7 @@
           return {idx:pidx, name:prod.name, spec:prod.spec, code:prod.code, qty:qty, pct: totalQty ? qty/totalQty*100 : 0};
         });
         custPickBody.innerHTML = '';
-        if(!prodRows.length){ custPickBody.innerHTML = '<div class="sub">'+T('ลูกค้ารายนี้ไม่มีประวัติซื้อสินค้าราย SKU ใน')+T(periodLabel())+'</div>'; return; }
+        if(!prodRows.length){ custPickBody.innerHTML = '<div class="sub">'+T('ลูกค้ารายนี้ไม่มีประวัติซื้อสินค้าราย SKU ใน')+T(periodLabelCD())+'</div>'; return; }
         var custPickHead = document.createElement('div'); custPickHead.className='sub'; custPickHead.style.marginBottom='6px';
         custPickHead.textContent = prodRows.length+' '+T('SKU')+' · '+totalQty.toLocaleString('en-US')+' '+T('ชิ้นรวม');
         custPickBody.appendChild(custPickHead);
@@ -2602,7 +2656,7 @@
           {key:'surdermPct', label:'Surederm %', sort:true, align:'right', defaultDir:-1, get:function(r){return r.surdermQty;}, render:function(r){return r.surdermPct==null?'—':'<span class="mono">'+r.surdermPct.toFixed(0)+'%</span>';}},
           {key:'reprodermPct', label:'Reproderm %', sort:true, align:'right', defaultDir:-1, get:function(r){return r.reprodermQty;}, render:function(r){return r.reprodermPct==null?'—':'<span class="mono">'+r.reprodermPct.toFixed(0)+'%</span>';}},
           {key:'otherPct', label:'อื่นๆ %', sort:true, align:'right', defaultDir:-1, get:function(r){return r.otherQty;}, render:function(r){return r.otherPct==null?'—':'<span class="mono">'+r.otherPct.toFixed(0)+'%</span>';}},
-          {key:'rev', label:'ยอด'+periodLabel(), sort:true, align:'right', defaultDir:-1, get:function(r){return r.rev;}, render:function(r){return '<span class="mono">฿'+r.rev.toLocaleString('en-US')+'</span>';}},
+          {key:'rev', label:'ยอด'+periodLabelCD(), sort:true, align:'right', defaultDir:-1, get:function(r){return r.rev;}, render:function(r){return '<span class="mono">฿'+r.rev.toLocaleString('en-US')+'</span>';}},
           {key:'orders', label:'ออเดอร์', sort:true, align:'right', defaultDir:-1, get:function(r){return r.orders;}, render:function(r){return '<span class="mono">'+r.orders+'</span>';}},
           {key:'last', label:'ซื้อล่าสุด', sort:true, get:function(r){return r.last||'';}, render:function(r){return r.last?fmtDate(r.last):'—';}},
           {key:'status', label:'สถานะ', sort:false, get:function(r){return r.status;}, render:function(r){return statusBadge(r);}}
@@ -2645,7 +2699,7 @@
       /* ---- panel 2: purchase behavior & product mix (the numbers) ---- */
       var behPanel = document.createElement('div'); behPanel.className='card panel'; behPanel.style.marginTop='14px';
       var behTh = document.createElement('h3'); behTh.textContent='พฤติกรรมการซื้อและสัดส่วนสินค้า'; behPanel.appendChild(behTh);
-      var behSub = document.createElement('div'); behSub.className='sub'; behSub.textContent='สัดส่วนสินค้าแต่ละหมวด, ยอด'+periodLabel()+', จำนวนออเดอร์, วันที่ซื้อล่าสุด และสถานะ'; behPanel.appendChild(behSub);
+      var behSub = document.createElement('div'); behSub.className='sub'; behSub.textContent='สัดส่วนสินค้าแต่ละหมวด, ยอด'+periodLabelCD()+', จำนวนออเดอร์, วันที่ซื้อล่าสุด และสถานะ'; behPanel.appendChild(behSub);
       var categoryOptionsCD = [
         {value:'all', label:'ทุกหมวดสินค้า'},
         {value:'fitme', label:'Fitme'},
