@@ -517,6 +517,11 @@
     "อันดับลูกค้าตามหมวดสินค้า": "Customer Ranking by Product Category",
     "Top 15 ลูกค้าที่ซื้อมากที่สุดในหมวดที่เลือก (ตามจำนวนชิ้น) — คลิกแท่งเพื่อดูโปรไฟล์ลูกค้า": "Top 15 customers by quantity in the selected category — click a bar to view the customer profile",
     "สัดส่วนในหมวดนี้": "Share of this category",
+    "รายละเอียดสินค้าที่ลูกค้าซื้อ (แยกรายคลินิก)": "Product Purchase Detail (By Clinic)",
+    "เลือกคลินิก/ลูกค้าเพื่อดูสินค้าทุกรายการที่เคยซื้อ": "Select a clinic/customer to see every product they've bought",
+    "— ค้นหา/เรียงลำดับได้": "— search/sort available",
+    "ลูกค้ารายนี้ไม่มีประวัติซื้อสินค้าราย SKU ใน": "This customer has no per-SKU purchase history in ",
+    "ชิ้นรวม": "units total",
     "มุมมองเซลล์รายบุคคล": "Individual Sales Rep View",
     "วันที่ออกใบสั่งขาย": "Order Date",
     "ผู้มีอำนาจตัดสินใจ": "Decision Maker",
@@ -2524,6 +2529,52 @@
       rankSelect.addEventListener('change', renderRankCD);
       renderRankCD();
       root.appendChild(rankPanel);
+
+      /* ---- breakdown: full per-product purchase detail for one chosen clinic ---- */
+      var custPickPanel = document.createElement('div'); custPickPanel.className='card panel'; custPickPanel.style.marginTop='14px';
+      var custPickHeadRow = document.createElement('div'); custPickHeadRow.style.cssText='display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;';
+      var custPickTh = document.createElement('h3'); custPickTh.textContent='รายละเอียดสินค้าที่ลูกค้าซื้อ (แยกรายคลินิก)'; custPickHeadRow.appendChild(custPickTh);
+      var custPickSelect = document.createElement('select'); custPickSelect.style.maxWidth='260px';
+      var rowsForPicker = rows.slice().sort(function(a,b){ return a.name.localeCompare(b.name); });
+      rowsForPicker.forEach(function(r){ var op=document.createElement('option'); op.value=r.idx; op.textContent=r.name; custPickSelect.appendChild(op); });
+      var defaultPickRow = rows.slice().sort(function(a,b){ return b.rev-a.rev; })[0];
+      if(defaultPickRow) custPickSelect.value = defaultPickRow.idx;
+      custPickHeadRow.appendChild(custPickSelect);
+      custPickPanel.appendChild(custPickHeadRow);
+      var custPickSub = document.createElement('div'); custPickSub.className='sub'; custPickSub.textContent='เลือกคลินิก/ลูกค้าเพื่อดูสินค้าทุกรายการที่เคยซื้อ ('+periodLabel()+') — ค้นหา/เรียงลำดับได้'; custPickPanel.appendChild(custPickSub);
+      var custPickBody = document.createElement('div'); custPickBody.style.marginTop='6px'; custPickPanel.appendChild(custPickBody);
+      function renderCustPick(){
+        var cidx = parseInt(custPickSelect.value, 10);
+        var txnsForCust = periodFilteredProdTxns().filter(function(t){ return t.cust===cidx; });
+        var byProd = {};
+        txnsForCust.forEach(function(t){ byProd[t.prod] = (byProd[t.prod]||0)+t.qty; });
+        var totalQty = Object.keys(byProd).reduce(function(s,k){ return s+byProd[k]; }, 0);
+        var prodRows = Object.keys(byProd).map(function(k){
+          var pidx = parseInt(k, 10); var prod = PRODUCTS[pidx];
+          var qty = byProd[k];
+          return {idx:pidx, name:prod.name, spec:prod.spec, code:prod.code, qty:qty, pct: totalQty ? qty/totalQty*100 : 0};
+        });
+        custPickBody.innerHTML = '';
+        if(!prodRows.length){ custPickBody.innerHTML = '<div class="sub">'+T('ลูกค้ารายนี้ไม่มีประวัติซื้อสินค้าราย SKU ใน')+T(periodLabel())+'</div>'; return; }
+        var custPickHead = document.createElement('div'); custPickHead.className='sub'; custPickHead.style.marginBottom='6px';
+        custPickHead.textContent = prodRows.length+' '+T('SKU')+' · '+totalQty.toLocaleString('en-US')+' '+T('ชิ้นรวม');
+        custPickBody.appendChild(custPickHead);
+        var t = DataTable({
+          columns: [
+            {key:'name', label:'สินค้า', sort:true, get:function(r){return r.name;}, render:function(r){return '<span class="prod-link" data-idx="'+r.idx+'">'+escapeHtml(r.name)+'</span>';}},
+            {key:'spec', label:'หมวดหมู่', sort:true, get:function(r){return r.spec;}, render:function(r){return escapeHtml(r.spec);}},
+            {key:'qty', label:'จำนวน', sort:true, align:'right', defaultDir:-1, get:function(r){return r.qty;}, render:function(r){return '<span class="mono">'+r.qty.toLocaleString('en-US')+'</span>';}},
+            {key:'pct', label:'สัดส่วน', sort:true, align:'right', defaultDir:-1, get:function(r){return r.pct;}, render:function(r){return '<span class="mono">'+r.pct.toFixed(1)+'%</span>';}}
+          ],
+          rows: prodRows, searchKeys:['name','spec','code'], searchPlaceholder:'ค้นหาชื่อสินค้า/หมวดหมู่…',
+          initialSort:{key:'qty', dir:-1},
+          renderLimit:500
+        });
+        custPickBody.appendChild(t);
+      }
+      custPickSelect.addEventListener('change', renderCustPick);
+      renderCustPick();
+      root.appendChild(custPickPanel);
 
       var tierOptions = [{value:'all', label:'ทุก Tier'}, {value:'S', label:'S'}, {value:'A', label:'A'}, {value:'B', label:'B'}];
       var regionOptionsCD = [{value:'all', label:'ทุกภาค/พื้นที่'}].concat(
