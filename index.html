@@ -566,6 +566,15 @@
     "ทั้งหมด (ไม่รวมปิดกิจการ)": "All (excluding closed)",
     "คะแนน": "points",
     "คะแนนโอกาสรวม": "Total opportunity score",
+    "ประมาณการยอดขาย (บาท) ตามหมวดสินค้า": "Estimated Revenue (฿) by Product Category",
+    "รายปี": "Yearly",
+    "รายไตรมาส": "Quarterly",
+    "รายเดือน": "Monthly",
+    "ประมาณการโดยกระจายยอดขาย (บาท) ของลูกค้าแต่ละรายในแต่ละเดือน ตามสัดส่วนจำนวนชิ้นที่ซื้อในหมวดนั้น — ไม่ใช่ตัวเลขจริงเป๊ะเพราะไม่มีราคาต่อชิ้นจริง ใช้ข้อมูลตลอดอายุลูกค้า ไม่ขึ้นกับตัวกรองปี/เดือนที่ sidebar": "Estimated by splitting each customer's monthly order revenue (฿) in proportion to the quantity they bought in each category — not exact, since no real per-unit price exists. Uses lifetime data, independent of the sidebar Year/Month filter",
+    "ช่วงเวลา": "Period",
+    "ยังไม่ระบุหมวด": "Uncategorized",
+    "ยอดขายจริงรวม": "Actual Total Revenue",
+    "ครอบคลุม%": "Coverage %",
     "มุมมองเซลล์รายบุคคล": "Individual Sales Rep View",
     "วันที่ออกใบสั่งขาย": "Order Date",
     "ผู้มีอำนาจตัดสินใจ": "Decision Maker",
@@ -2205,6 +2214,61 @@
     });
     return roll;
   }
+  var REV_CATS = ['fitme','misti','fixtine','tnr','nasal','surederm','reproderm','other'];
+  function emptyRevBucket(){ return {fitme:0,misti:0,fixtine:0,tnr:0,nasal:0,surederm:0,reproderm:0,other:0,unallocated:0,actual:0}; }
+  /* No per-SKU price list exists in the source data — only each order's total THB amount and each
+     product line's quantity are known separately, with no direct link between them. So category
+     revenue is an ESTIMATE: for each customer, each order-month's total amount is split across
+     categories in proportion to that same customer's product-quantity mix that month (assumes a
+     roughly uniform per-piece value within one customer's own monthly basket — the closest tie we
+     can make between the two datasets). Whatever a customer bought with no matching product-txn
+     data that month is tracked separately as "unallocated" rather than silently dropped, so every
+     period's estimated categories + unallocated always reconcile back to the real order total. */
+  function estimateCategoryRevenueByMonth(){
+    var revByCustMonth = {};
+    ALL_ORDERS.forEach(function(o){
+      var m = o.date.slice(0,7);
+      revByCustMonth[o.cust] = revByCustMonth[o.cust] || {};
+      revByCustMonth[o.cust][m] = (revByCustMonth[o.cust][m]||0) + o.amount;
+    });
+    var qtyByCustMonthCat = {};
+    PROD_TXNS.forEach(function(t){
+      var prod = PRODUCTS[t.prod];
+      var bucket = productBucket(prod.name, prod.spec);
+      var m = t.date.slice(0,7);
+      qtyByCustMonthCat[t.cust] = qtyByCustMonthCat[t.cust] || {};
+      qtyByCustMonthCat[t.cust][m] = qtyByCustMonthCat[t.cust][m] || {};
+      qtyByCustMonthCat[t.cust][m][bucket] = (qtyByCustMonthCat[t.cust][m][bucket]||0) + t.qty;
+    });
+    var result = {};
+    Object.keys(revByCustMonth).forEach(function(custKey){
+      var cust = parseInt(custKey, 10);
+      var months = revByCustMonth[custKey];
+      Object.keys(months).forEach(function(m){
+        var amount = months[m];
+        var bucket = result[m] || (result[m] = emptyRevBucket());
+        bucket.actual += amount;
+        var catQty = qtyByCustMonthCat[cust] && qtyByCustMonthCat[cust][m];
+        var totalQty = catQty ? REV_CATS.reduce(function(s,k){ return s+(catQty[k]||0); }, 0) : 0;
+        if(!totalQty){ bucket.unallocated += amount; return; }
+        REV_CATS.forEach(function(k){ if(catQty[k]) bucket[k] += amount * (catQty[k]/totalQty); });
+      });
+    });
+    return result; // keyed by 'yyyy-mm'
+  }
+  function aggregateRevByGranularity(monthlyResult, granularity){
+    var out = {};
+    Object.keys(monthlyResult).forEach(function(m){
+      var key;
+      if(granularity==='year') key = m.slice(0,4);
+      else if(granularity==='quarter') key = m.slice(0,4)+' Q'+Math.ceil(parseInt(m.slice(5,7),10)/3);
+      else key = m;
+      var bucket = out[key] || (out[key] = emptyRevBucket());
+      var src = monthlyResult[m];
+      REV_CATS.concat(['unallocated','actual']).forEach(function(k){ bucket[k] += src[k]; });
+    });
+    return out;
+  }
   var TIER_TH = {S:'S', A:'A', B:'B'};
   function computeAutoTier(rank, total){
     var pct = rank/total;
@@ -2584,6 +2648,58 @@
         tooltip: function(d){ return '<b>Tier '+d[0]+'</b><div class="row"><span>จำนวน</span><b>'+d[1]+' ราย</b></div>'; }
       });
       row1.appendChild(p1); row1.appendChild(p2); root.appendChild(row1);
+
+      /* ---- estimated revenue (บาท) by product category, over time ---- */
+      var revPanel = document.createElement('div'); revPanel.className='card panel'; revPanel.style.marginTop='14px';
+      var revHeadRow = document.createElement('div'); revHeadRow.style.cssText='display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;';
+      var revTh = document.createElement('h3'); revTh.textContent='ประมาณการยอดขาย (บาท) ตามหมวดสินค้า'; revHeadRow.appendChild(revTh);
+      var revGranSelect = document.createElement('select');
+      [['year','รายปี'], ['quarter','รายไตรมาส'], ['month','รายเดือน']].forEach(function(g){
+        var op = document.createElement('option'); op.value = g[0]; op.textContent = T(g[1]); revGranSelect.appendChild(op);
+      });
+      revHeadRow.appendChild(revGranSelect);
+      revPanel.appendChild(revHeadRow);
+      var revSub = document.createElement('div'); revSub.className='sub';
+      revSub.textContent = 'ประมาณการโดยกระจายยอดขาย (บาท) ของลูกค้าแต่ละรายในแต่ละเดือน ตามสัดส่วนจำนวนชิ้นที่ซื้อในหมวดนั้น — ไม่ใช่ตัวเลขจริงเป๊ะเพราะไม่มีราคาต่อชิ้นจริง ใช้ข้อมูลตลอดอายุลูกค้า ไม่ขึ้นกับตัวกรองปี/เดือนที่ sidebar';
+      revPanel.appendChild(revSub);
+      var revBody = document.createElement('div'); revBody.style.marginTop='6px'; revPanel.appendChild(revBody);
+      var monthlyRevEstimate = estimateCategoryRevenueByMonth();
+      function renderRevPanel(){
+        var agg = aggregateRevByGranularity(monthlyRevEstimate, revGranSelect.value);
+        var periods = Object.keys(agg).sort();
+        var revRows = periods.map(function(p){
+          var d = agg[p];
+          var estTotal = REV_CATS.reduce(function(s,k){ return s+d[k]; }, 0);
+          var coverage = d.actual ? (estTotal/d.actual*100) : null;
+          var r = {period:p, unallocated:d.unallocated, actual:d.actual, coverage:coverage};
+          REV_CATS.forEach(function(k){ r[k] = d[k]; });
+          return r;
+        });
+        revBody.innerHTML = '';
+        var revTable = DataTable({
+          columns: [
+            {key:'period', label:'ช่วงเวลา', sort:true, get:function(r){return r.period;}, render:function(r){return '<span class="mono">'+escapeHtml(r.period)+'</span>';}},
+            {key:'fitme', label:'Fitme', sort:true, align:'right', defaultDir:-1, get:function(r){return r.fitme;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.fitme,true)+'</span>';}},
+            {key:'misti', label:'Misti', sort:true, align:'right', defaultDir:-1, get:function(r){return r.misti;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.misti,true)+'</span>';}},
+            {key:'fixtine', label:'FIXTINE', sort:true, align:'right', defaultDir:-1, get:function(r){return r.fixtine;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.fixtine,true)+'</span>';}},
+            {key:'tnr', label:'TNR Mesh', sort:true, align:'right', defaultDir:-1, get:function(r){return r.tnr;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.tnr,true)+'</span>';}},
+            {key:'nasal', label:'Nasal splint', sort:true, align:'right', defaultDir:-1, get:function(r){return r.nasal;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.nasal,true)+'</span>';}},
+            {key:'surederm', label:'Surederm', sort:true, align:'right', defaultDir:-1, get:function(r){return r.surederm;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.surederm,true)+'</span>';}},
+            {key:'reproderm', label:'Reproderm', sort:true, align:'right', defaultDir:-1, get:function(r){return r.reproderm;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.reproderm,true)+'</span>';}},
+            {key:'other', label:'อื่นๆ', sort:true, align:'right', defaultDir:-1, get:function(r){return r.other;}, render:function(r){return '<span class="mono">฿'+fmtBaht(r.other,true)+'</span>';}},
+            {key:'unallocated', label:'ยังไม่ระบุหมวด', sort:true, align:'right', defaultDir:-1, get:function(r){return r.unallocated;}, render:function(r){return r.unallocated>0 ? '<span class="mono">฿'+fmtBaht(r.unallocated,true)+'</span>' : '—';}},
+            {key:'actual', label:'ยอดขายจริงรวม', sort:true, align:'right', defaultDir:-1, get:function(r){return r.actual;}, render:function(r){return '<b class="mono">฿'+fmtBaht(r.actual,true)+'</b>';}},
+            {key:'coverage', label:'ครอบคลุม%', sort:true, align:'right', defaultDir:-1, get:function(r){return r.coverage==null?-1:r.coverage;}, render:function(r){return r.coverage==null?'—':r.coverage.toFixed(0)+'%';}}
+          ],
+          rows: revRows, searchKeys:['period'], searchPlaceholder:false,
+          initialSort:{key:'period', dir:-1},
+          renderLimit:60
+        });
+        revBody.appendChild(revTable);
+      }
+      revGranSelect.addEventListener('change', renderRevPanel);
+      renderRevPanel();
+      root.appendChild(revPanel);
 
       /* ---- ranking: top customers within one chosen product category ---- */
       var CATEGORY_LIST_CD = [
