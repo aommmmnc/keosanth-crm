@@ -855,6 +855,18 @@
     "เป้าหมายบริษัท (รายปี) vs ยอดขายจริง": "Company Target (Annual) vs Actual",
     "โบนัสที่ได้ตอนนี้": "Bonus Earned So Far",
     "โบนัสทั้งบริษัท นับเป็นจำนวนเดือนเงินเดือน": "Company-wide bonus, counted in months of salary",
+    "เป้าหมายยอดขายปีนี้ (": "This Year's Sales Target (",
+    "ยอดขายจริงปี ": "Actual Sales Year ",
+    "เป้าหมายปีนี้": "This Year's Target",
+    "ยังขาดอีก": "Remaining to Target",
+    "เกินเป้าหมายแล้ว": "Target Exceeded",
+    "ถึงจะถึงเป้าหมาย": "until target reached",
+    "เป้าหมายที่ตั้งไว้ ": "Target set at ",
+    " ต่อปี": " per year",
+    "เทียบยอดขายรายเดือนกับปีอื่น": "Compare Monthly Sales with Another Year",
+    "เทียบยอดขายปี ": "Compare Sales Year ",
+    "ของเป้าหมาย": "of target",
+    "กับปีที่เลือก แยกตามเดือนปฏิทิน (ไม่ขึ้นกับตัวกรองปี/เดือนที่ sidebar)": " vs the selected year, broken down by calendar month (independent of the sidebar Year/Month filter)",
   };
   var I18N_KEYS = Object.keys(I18N).sort(function(a,b){ return b.length - a.length; });
   function T(s){
@@ -977,6 +989,40 @@
     return {tiers:tiers, earned:earned, earnedTier:earnedTier, nextTier:nextTier, revenue:yearRevenue};
   }
   function picDisplay(name){ return PIC_NOTES[name] ? name+' ('+PIC_NOTES[name]+')' : name; }
+
+  /* ---------- this year's plain sales target (headline KPI on the Overview page) ---------- */
+  var ANNUAL_SALES_TARGET = 120000000;
+
+  /* ---------- year-vs-year monthly comparison, always by calendar month regardless of sidebar filter ---------- */
+  function monthlyTotalsForYear(year){
+    var totals = {}; for(var m=1;m<=12;m++) totals[String(m).padStart(2,'0')] = 0;
+    ALL_ORDERS.forEach(function(o){
+      if(o.date.slice(0,4)===year){
+        var mm = o.date.slice(5,7);
+        totals[mm] = (totals[mm]||0) + o.amount;
+      }
+    });
+    return totals;
+  }
+  function renderYearCompareBars(container, rows, opts){
+    container.innerHTML = '';
+    var maxV = Math.max.apply(null, rows.reduce(function(acc,r){ acc.push(r.a,r.b); return acc; },[])) || 1;
+    rows.forEach(function(r){
+      var wrap = document.createElement('div'); wrap.style.cssText='margin-bottom:9px;';
+      var lbl = document.createElement('div'); lbl.style.cssText='font-size:11.5px; color:var(--ink-muted); margin-bottom:3px;'; lbl.textContent = r.label;
+      wrap.appendChild(lbl);
+      [['a',opts.colorA,opts.labelA],['b',opts.colorB,opts.labelB]].forEach(function(s){
+        var track = document.createElement('div'); track.style.cssText='height:13px; background:var(--surface-2); border-radius:4px; overflow:hidden; margin-bottom:3px;';
+        var pct = Math.max(0, r[s[0]]/maxV*100);
+        var fill = document.createElement('div'); fill.style.cssText='height:100%; width:'+pct+'%; background:'+s[1]+'; border-radius:4px;';
+        track.appendChild(fill);
+        track.addEventListener('mousemove', function(e){ showTip(e.clientX,e.clientY,'<b>'+s[2]+' · '+r.label+'</b><div class="row"><span>ยอดขาย</span><b>฿'+fmtBaht(r[s[0]],true)+'</b></div>'); });
+        track.addEventListener('mouseleave', hideTip);
+        wrap.appendChild(track);
+      });
+      container.appendChild(wrap);
+    });
+  }
 
   /* ---------- period-over-period comparison (MoM/YoY) for the Overview page ---------- */
   function ordersForPeriod(year, month){
@@ -1444,6 +1490,27 @@
       var prevRevenue = prevOrders ? prevOrders.reduce(function(s,o){return s+o.amount;},0) : null;
       var revTrend = prevPeriod ? trendText(l12mTotalRevenue, prevRevenue, true)+' '+T('เทียบ')+prevPeriod.label : '';
 
+      // ---- this year's plain sales target vs actual — always shown for CURRENT_YEAR regardless of the sidebar filter ----
+      var targetYearRevenue = ALL_ORDERS.filter(function(o){ return o.date.slice(0,4)===CURRENT_YEAR; }).reduce(function(s,o){return s+o.amount;},0);
+      var targetPct = Math.max(0, Math.min(100, targetYearRevenue/ANNUAL_SALES_TARGET*100));
+      var targetGap = ANNUAL_SALES_TARGET - targetYearRevenue;
+      var targetPanel = document.createElement('div'); targetPanel.className='card panel'; targetPanel.style.marginBottom='14px';
+      var targetH = document.createElement('h3'); targetH.textContent='เป้าหมายยอดขายปีนี้ ('+CURRENT_YEAR+')'; targetPanel.appendChild(targetH);
+      var targetSub = document.createElement('div'); targetSub.className='sub'; targetSub.textContent='เป้าหมายที่ตั้งไว้ ฿'+fmtBaht(ANNUAL_SALES_TARGET,true)+' ต่อปี'; targetPanel.appendChild(targetSub);
+      var targetKpis = document.createElement('div'); targetKpis.className='grid g-3'; targetKpis.style.marginTop='10px';
+      targetKpis.appendChild(kpiCard('ยอดขายจริงปี '+CURRENT_YEAR, '฿'+fmtBaht(targetYearRevenue,true), targetPct.toFixed(1)+'% ของเป้าหมาย'));
+      targetKpis.appendChild(kpiCard('เป้าหมายปีนี้', '฿'+fmtBaht(ANNUAL_SALES_TARGET,true), ''));
+      if(targetGap>0){
+        targetKpis.appendChild(kpiCard('ยังขาดอีก', '฿'+fmtBaht(targetGap,true), 'ถึงจะถึงเป้าหมาย', 'warn'));
+      } else {
+        targetKpis.appendChild(kpiCard('เกินเป้าหมายแล้ว', '฿'+fmtBaht(-targetGap,true), '', 'good'));
+      }
+      targetPanel.appendChild(targetKpis);
+      var targetTrack = document.createElement('div'); targetTrack.style.cssText='margin-top:16px; height:10px; background:var(--surface-2); border-radius:5px; overflow:hidden;';
+      var targetFill = document.createElement('div'); targetFill.style.cssText='height:100%; width:'+targetPct+'%; background:'+(targetPct>=100?'var(--good)':'var(--accent)')+'; border-radius:5px;';
+      targetTrack.appendChild(targetFill); targetPanel.appendChild(targetTrack);
+      root.appendChild(targetPanel);
+
       // ---- company-wide annual bonus target vs actual — the headline number for leadership ---
       var bonusPanel = document.createElement('div'); bonusPanel.className='card panel'; bonusPanel.style.marginBottom='14px';
       var bonusH = document.createElement('h3'); bonusH.textContent='เป้าหมายบริษัท (รายปี) vs ยอดขายจริง'; bonusPanel.appendChild(bonusH);
@@ -1521,6 +1588,37 @@
         tooltip:function(d){ var p=picRoll[d[0]]; return '<b>'+d[0]+'</b><div class="row"><span>ยอดขาย'+periodLabel()+'</span><b>฿'+fmtBaht(p.l12mTotal)+'</b></div><div class="row"><span>ลูกค้า</span><b>'+p.l12mCustSet.size+'</b></div>'; }
       });
       row2.appendChild(p1); row2.appendChild(p2); root.appendChild(row2);
+
+      // ---- year-vs-year monthly comparison, picked from a dropdown — always by calendar month, independent of the sidebar filter ----
+      var cmpYearsAvailable = DATA_YEARS.filter(function(y){ return y!==CURRENT_YEAR; });
+      if(cmpYearsAvailable.length){
+        var cmpPanel = document.createElement('div'); cmpPanel.className='card panel'; cmpPanel.style.marginTop='14px';
+        var cmpHeadRow = document.createElement('div'); cmpHeadRow.style.cssText='display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;';
+        var cmpH = document.createElement('h3'); cmpH.textContent='เทียบยอดขายรายเดือนกับปีอื่น'; cmpHeadRow.appendChild(cmpH);
+        var cmpSelect = document.createElement('select');
+        cmpYearsAvailable.slice().reverse().forEach(function(y){ var op=document.createElement('option'); op.value=y; op.textContent=y; cmpSelect.appendChild(op); });
+        cmpHeadRow.appendChild(cmpSelect);
+        cmpPanel.appendChild(cmpHeadRow);
+        var cmpSub = document.createElement('div'); cmpSub.className='sub'; cmpSub.textContent='เทียบยอดขายปี '+CURRENT_YEAR+' กับปีที่เลือก แยกตามเดือนปฏิทิน (ไม่ขึ้นกับตัวกรองปี/เดือนที่ sidebar)'; cmpPanel.appendChild(cmpSub);
+        var cmpLegend = document.createElement('div'); cmpLegend.style.cssText='display:flex; gap:14px; margin:10px 0 8px; font-size:11.5px; color:var(--ink-2);'; cmpPanel.appendChild(cmpLegend);
+        var cmpBody = document.createElement('div'); cmpPanel.appendChild(cmpBody);
+        function renderCmp(){
+          var cmpYear = cmpSelect.value;
+          var baseTotals = monthlyTotalsForYear(CURRENT_YEAR);
+          var cmpTotals = monthlyTotalsForYear(cmpYear);
+          var rows = [];
+          for(var m=1;m<=12;m++){
+            var mm = String(m).padStart(2,'0');
+            rows.push({label: thMonths[m-1], a: baseTotals[mm]||0, b: cmpTotals[mm]||0});
+          }
+          cmpLegend.innerHTML = '<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:2px; background:var(--accent); display:inline-block;"></span>ปี '+CURRENT_YEAR+'</span>'+
+            '<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:2px; background:var(--s2); display:inline-block;"></span>ปี '+cmpYear+'</span>';
+          renderYearCompareBars(cmpBody, rows, {colorA:'var(--accent)', colorB:'var(--s2)', labelA:'ปี '+CURRENT_YEAR, labelB:'ปี '+cmpYear});
+        }
+        cmpSelect.addEventListener('change', renderCmp);
+        renderCmp();
+        root.appendChild(cmpPanel);
+      }
 
       var row3 = document.createElement('div'); row3.className='grid g-2'; row3.style.marginTop='14px';
       var p3 = panel('การกระจุกตัวของรายได้ต่อลูกค้า ('+periodLabel()+')');
